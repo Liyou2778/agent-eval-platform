@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent 评测中台 · MVP</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <h1>Agent 评测中台 <span class="tag">MVP</span></h1>
+    <p class="sub">数据集 × 目标 × 并发跑批 × 判定 × 指标 × 回归 diff · 默认离线可跑</p>
+  </div>
+  <div class="topstats" id="top-stats">
+    <span class="stat-chip" id="health-chip">连接中…</span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab active" data-tab="datasets">① 数据集</button>
+  <button class="tab" data-tab="targets">② 目标</button>
+  <button class="tab" data-tab="runs">③ 运行</button>
+  <button class="tab" data-tab="compare">④ 对比</button>
+</nav>
+
+<main>
+  <!-- ================= datasets ================= -->
+  <section class="tab-panel active" id="panel-datasets">
+    <div class="grid">
+      <div class="col">
+        <div class="card">
+          <h2>新建数据集</h2>
+          <form id="dataset-form" class="form">
+            <label>名称 <input name="name" required placeholder="例如：中文问答基准"></label>
+            <label>版本 <input name="version" value="v1"></label>
+            <button class="btn primary" type="submit">创建数据集</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>导入用例 <span class="hint">JSON 数组或 JSONL 文本</span></h2>
+          <form id="import-form" class="form">
+            <label>目标数据集 <select name="dataset_id" id="import-dataset"></select></label>
+            <label>格式
+              <select name="format">
+                <option value="auto">自动识别</option>
+                <option value="json">JSON 数组</option>
+                <option value="jsonl">JSONL</option>
+              </select>
+            </label>
+            <label>用例文本
+              <textarea name="text" rows="9" placeholder='[{"input":"问题","expected":"关键词A|关键词B","tags":["demo"]}]'></textarea>
+            </label>
+            <label>或选择文件 <input type="file" id="import-file" accept=".json,.jsonl,.txt"></label>
+            <button class="btn primary" type="submit">导入用例</button>
+            <pre class="result" id="import-result" hidden></pre>
+          </form>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>数据集 <span class="badge" id="dataset-count">0</span></h2>
+          <div class="table-wrap">
+            <table id="dataset-table">
+              <thead><tr><th>ID</th><th>名称</th><th>版本</th><th>用例数</th><th>创建时间</th><th></th></tr></thead>
+              <tbody><tr><td colspan="6" class="empty-row">加载中…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h2>用例预览 <span class="hint" id="case-preview-title">点击数据集「查看用例」</span></h2>
+          <div class="table-wrap tall">
+            <table id="case-table">
+              <thead><tr><th>ID</th><th>输入</th><th>期望</th><th>标签</th></tr></thead>
+              <tbody><tr><td colspan="4" class="empty-row">暂无用例</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= targets ================= -->
+  <section class="tab-panel" id="panel-targets">
+    <div class="grid">
+      <div class="col">
+        <div class="card">
+          <h2>新建目标</h2>
+          <form id="target-form" class="form">
+            <label>名称 <input name="name" required placeholder="例如：mock-baseline-85"></label>
+            <label>类型
+              <select name="kind" id="target-kind">
+                <option value="mock">mock（离线确定性模拟）</option>
+                <option value="http">http（自定义 JSON 接口）</option>
+                <option value="openai-compatible">openai-compatible（Chat Completions）</option>
+              </select>
+            </label>
+            <label>config JSON
+              <textarea name="config" id="target-config" rows="12"></textarea>
+            </label>
+            <button class="btn primary" type="submit">创建目标</button>
+          </form>
+        </div>
+        <div class="card">
+          <h2>探活</h2>
+          <form id="probe-form" class="form">
+            <label>目标 <select name="target_id" id="probe-target"></select></label>
+            <label>输入 <input name="input" value="你好，请用一句话介绍你自己。"></label>
+            <button class="btn" type="submit">发送探活请求</button>
+          </form>
+          <pre class="result" id="probe-result" hidden></pre>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <h2>目标列表 <span class="badge" id="target-count">0</span></h2>
+          <div class="table-wrap tall">
+            <table id="target-table">
+              <thead><tr><th>ID</th><th>名称</th><th>类型</th><th>配置摘要</th><th></th></tr></thead>
+              <tbody><tr><td colspan="5" class="empty-row">加载中…</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= runs ================= -->
+  <section class="tab-panel" id="panel-runs">
+    <div class="card">
+      <h2>发起评测</h2>
+      <form id="run-form" class="form form-inline">
+        <label>数据集 <select name="dataset_id" id="run-dataset"></select></label>
+        <label>目标 <select name="target_id" id="run-target"></select></label>
+        <label>并发 <input type="number" name="concurrency" value="8" min="1" max="64"></label>
+        <label>重试 <input type="number" name="retries" value="1" min="0" max="5"></label>
+        <label>超时(s) <input type="number" name="timeout_s" value="30" step="0.5" min="0.1"></label>
+        <label>判定
+          <select name="judge_kind">
+            <option value="rule">规则断言</option>
+            <option value="llm">LLM-as-judge</option>
+          </select>
+        </label>
+        <label>模式
+          <select name="judge_mode">
+            <option value="mock">mock（离线）</option>
+            <option value="openai">openai 兼容</option>
+          </select>
+        </label>
+        <button class="btn primary" type="submit">开始评测</button>
+      </form>
+      <p class="hint">默认全离线：mock 目标按用例哈希确定性出数（约 85% 通过），mock judge 用关键词覆盖启发式；无需任何 API key。</p>
+    </div>
+    <div class="grid grid-wide">
+      <div class="card">
+        <h2>运行历史 <span class="badge" id="run-count">0</span></h2>
+        <div class="table-wrap tall">
+          <table id="run-table">
+            <thead><tr><th>Run</th><th>状态</th><th>目标</th><th>进度</th><th>通过率</th><th>开始时间</th></tr></thead>
+            <tbody><tr><td colspan="6" class="empty-row">加载中…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" id="run-detail-card">
+        <h2>运行详情
+          <span class="hint" id="run-detail-title">选择左侧运行</span>
+          <button class="btn danger small" id="cancel-run" hidden>取消运行</button>
+        </h2>
+        <div id="run-detail" class="empty">还没有选择运行</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= compare ================= -->
+  <section class="tab-panel" id="panel-compare">
+    <div class="card">
+      <h2>回归对比</h2>
+      <form id="compare-form" class="form form-inline">
+        <label>基线 run A <select id="compare-a"></select></label>
+        <label>候选 run B <select id="compare-b"></select></label>
+        <button class="btn primary" type="submit">开始对比</button>
+      </form>
+      <p class="hint">A 为基线、B 为改动后：修复 = A 失败 → B 通过；回归 = A 通过 → B 失败；仍失败 = 两次都失败。</p>
+    </div>
+    <div id="compare-result" class="empty">选择两个已完成的 run 进行比较</div>
+  </section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

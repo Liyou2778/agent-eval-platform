@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+data/
+*.db
+*.db-wal
+*.db-shm
+node_modules/
+_v_out.log
+_v_err.log
+_verify_*.log
